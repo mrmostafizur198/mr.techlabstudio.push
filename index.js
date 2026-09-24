@@ -7,8 +7,9 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// ── Firebase Admin initialize ──
-const serviceAccount = require('./serviceAccountKey.json');
+// ── Firebase Admin initialize (Vercel Environment Variable) ──
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
@@ -130,8 +131,6 @@ app.get('/tokens', async (req, res) => {
   const { appId } = req.query;
   if (!isValidAppId(appId)) return res.status(400).json({ success: false, error: 'valid appId required' });
 
-  // Password check disabled — সব request password ছাড়াই allow
-
   try {
     const snap   = await devicesRef(appId).get();
     const tokens = snap.docs.map(d => ({
@@ -150,8 +149,6 @@ app.get('/tokens', async (req, res) => {
 app.post('/send-notification', async (req, res) => {
   const { token, title, body, imageUrl } = req.body;
   if (!token) return res.status(400).json({ success: false, error: 'token required' });
-
-  // Password check disabled — password ছাড়াই allow
 
   try {
     const t = title || 'Notification';
@@ -177,8 +174,6 @@ app.post('/send-all', async (req, res) => {
   const { appId, title, body, imageUrl } = req.body;
   if (!isValidAppId(appId)) return res.status(400).json({ success: false, error: 'valid appId required' });
 
-  // Password check disabled — password ছাড়াই allow
-
   try {
     const snap = await devicesRef(appId).get();
     if (snap.empty) return res.json({ success: false, error: 'No tokens found for this app' });
@@ -195,7 +190,6 @@ app.post('/send-all', async (req, res) => {
     const result = await admin.messaging().sendEach(messages);
     console.log(`[${appId}] Sent: ${result.successCount} ok, ${result.failureCount} failed`);
 
-    // invalid token গুলো Firestore থেকে delete করো
     const batch = db.batch();
     let removed = 0;
     result.responses.forEach((r, i) => {
@@ -222,8 +216,6 @@ app.delete('/token', async (req, res) => {
   const { appId, token } = req.query;
   if (!isValidAppId(appId) || !token) return res.status(400).json({ success: false, error: 'appId and token required' });
 
-  // Password check disabled — password ছাড়াই allow
-
   try {
     await devicesRef(appId).doc(tokenDocId(token)).delete();
     res.json({ success: true });
@@ -233,5 +225,10 @@ app.delete('/token', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
+// Vercel Module Export
+module.exports = app;
+
 const PORT = process.env.PORT || 7860;
-app.listen(PORT, () => console.log(`Wevlo Push Server running on port ${PORT}`));
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => console.log(`Wevlo Push Server running on port ${PORT}`));
+        }
